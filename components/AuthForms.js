@@ -14,7 +14,8 @@ export function SignupForm() {
   const handleSignup = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password)
-      router.push("/chat")
+      // Redirect to login page after signup
+      router.push("/login")
     } catch (err) {
       setError(err.message)
     }
@@ -22,8 +23,18 @@ export function SignupForm() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
       <button onClick={handleSignup}>Sign Up</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
@@ -39,6 +50,7 @@ export function LoginForm() {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password)
+      // Redirect to chat page after login
       router.push("/chat")
     } catch (err) {
       setError(err.message)
@@ -47,8 +59,18 @@ export function LoginForm() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
       <button onClick={handleLogin}>Login</button>
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
