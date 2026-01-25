@@ -5,9 +5,8 @@ export default function LoginPage() {
   return (
     <main style={{ padding: 40, maxWidth: 400, margin: "auto" }}>
       <h2>Login</h2>
+      <p>Already signed up? Please login to continue.</p>
       <LoginForm />
     </main>
   )
 }
-
-
