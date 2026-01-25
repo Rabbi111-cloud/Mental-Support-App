@@ -1,8 +1,4 @@
-  </html>
-  )
-}
-4️⃣ app/page.js (Landing Page + Disclaimer)
-import Link from "next/link"
+  import Link from "next/link"
 
 export default function Home() {
   return (
