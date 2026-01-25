@@ -17,8 +17,9 @@ export default function Home() {
 
       <div style={{ marginTop: 20 }}>
         <Link href="/login">Login</Link>{" | "}
-        <Link href="/signup">Sign up</Link>
+        <Link href="/signup">Sign Up</Link>
       </div>
     </main>
   )
 }
+
