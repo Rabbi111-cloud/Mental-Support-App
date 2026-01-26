@@ -16,16 +16,16 @@ const HF_API_KEY = process.env.HF_API_KEY || ""
 
 /* ================= FALLBACKS ================= */
 const fallbackReplies = [
-  "I’m here with you. What’s been weighing on your mind?",
-  "Thank you for sharing. Can you tell me a little more?",
-  "I’m listening. What do you feel right now?",
-  "You don’t have to rush. Take your time.",
-  "That sounds important. How can I support you?"
+  "I’m here with you. What’s been on your mind lately?",
+  "Thank you for telling me that. Do you want to talk more about it?",
+  "That sounds difficult. How long have you been feeling this way?",
+  "I’m listening. What feels hardest right now?",
+  "You don’t have to go through this alone. Tell me more."
 ]
 
 export async function POST(req) {
   try {
-    /* ===== IP ===== */
+    /* ===== GET IP ===== */
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
@@ -38,7 +38,7 @@ export async function POST(req) {
 
     if (recent.length >= RATE_LIMIT) {
       return NextResponse.json(
-        { reply: "Let’s slow down for a moment 🌱 I’m still here." },
+        { reply: "Let’s slow down a little 🌱 I’m still here with you." },
         { status: 429 }
       )
     }
@@ -46,7 +46,7 @@ export async function POST(req) {
     recent.push(now)
     ipRequests.set(ip, recent)
 
-    /* ===== MESSAGE ===== */
+    /* ===== READ MESSAGE ===== */
     const { message } = await req.json()
 
     /* ===== SAFETY FILTER ===== */
@@ -62,7 +62,7 @@ export async function POST(req) {
     if (unsafeKeywords.some((w) => message.toLowerCase().includes(w))) {
       return NextResponse.json({
         reply:
-          "I’m really glad you reached out. I can’t help with unsafe topics, but you deserve care and support. Please talk to a trusted adult or local professional."
+          "I’m really glad you reached out. I can’t help with unsafe topics, but you deserve care and support. Please reach out to a trusted adult or local professional."
       })
     }
 
@@ -73,7 +73,7 @@ export async function POST(req) {
 
     let reply = ""
 
-    /* ===== OPENAI (PRIMARY) ===== */
+    /* ================= OPENAI (PRIMARY) ================= */
     try {
       if (process.env.OPENAI_API_KEY) {
         const openaiRes = await fetch(
@@ -90,11 +90,11 @@ export async function POST(req) {
                 {
                   role: "system",
                   content:
-                    "You are a calm, kind guide. No medical advice. Ask gentle questions."
+                    "You are a calm, empathetic guide. Ask gentle follow-up questions. No medical advice."
                 },
                 ...updatedHistory.map((m) => ({
                   role: m.startsWith("User") ? "user" : "assistant",
-                  content: m.replace("User: ", "")
+                  content: m.replace("User: ", "").replace("Guide: ", "")
                 })),
                 { role: "user", content: message }
               ],
@@ -106,11 +106,21 @@ export async function POST(req) {
         const data = await openaiRes.json()
         reply = data.choices?.[0]?.message?.content
       }
-    } catch {}
+    } catch {
+      // silently fall back
+    }
 
-    /* ===== HUGGING FACE (FALLBACK) ===== */
+    /* ================= HUGGING FACE (CONVERSATIONAL FIX) ================= */
     if (!reply) {
       try {
+        const conversation = [
+          "User: Hi",
+          "Guide: Hi, I’m here with you. What’s been on your mind?",
+          ...updatedHistory,
+          `User: ${message}`,
+          "Guide:"
+        ].join("\n")
+
         const hfRes = await fetch(HF_MODEL_URL, {
           method: "POST",
           headers: {
@@ -120,13 +130,31 @@ export async function POST(req) {
             })
           },
           body: JSON.stringify({
-            inputs: updatedHistory.join("\n") + `\nUser: ${message}`
+            inputs: conversation,
+            parameters: {
+              max_new_tokens: 80,
+              temperature: 0.8,
+              repetition_penalty: 1.2,
+              return_full_text: false
+            }
           })
         })
 
         const hfData = await hfRes.json()
-        reply = hfData?.generated_text || hfData?.[0]?.generated_text
-      } catch {}
+        reply =
+          hfData?.generated_text ||
+          hfData?.[0]?.generated_text
+      } catch {
+        // continue to fallback
+      }
+    }
+
+    /* ===== CLEAN HF OUTPUT ===== */
+    if (reply) {
+      reply = reply
+        .replace(/User:.*$/gi, "")
+        .replace(/Guide:/gi, "")
+        .trim()
     }
 
     /* ===== FINAL FALLBACK ===== */
