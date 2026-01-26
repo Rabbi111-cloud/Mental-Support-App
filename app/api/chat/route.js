@@ -1,75 +1,79 @@
 import { NextResponse } from "next/server"
 
-// ===== RATE LIMIT CONFIG =====
-const RATE_LIMIT = 10 // max requests
-const WINDOW_MS = 60 * 1000 // 1 minute
-
-// In-memory store (safe for MVP)
+/* ================= RATE LIMIT ================= */
+const RATE_LIMIT = 10
+const WINDOW_MS = 60 * 1000
 const ipRequests = new Map()
 
-// Hugging Face fallback
-const HF_MODEL_URL = "https://api-inference.huggingface.co/models/gpt2"
+/* ================= MEMORY ================= */
+const conversationMemory = new Map()
+const MAX_MEMORY = 5
+
+/* ================= MODELS ================= */
+const HF_MODEL_URL =
+  "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
 const HF_API_KEY = process.env.HF_API_KEY || ""
+
+/* ================= FALLBACKS ================= */
+const fallbackReplies = [
+  "I’m here with you. What’s been weighing on your mind?",
+  "Thank you for sharing. Can you tell me a little more?",
+  "I’m listening. What do you feel right now?",
+  "You don’t have to rush. Take your time.",
+  "That sounds important. How can I support you?"
+]
 
 export async function POST(req) {
   try {
-    // ===== GET USER IP =====
+    /* ===== IP ===== */
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
       "unknown"
 
+    /* ===== RATE LIMIT ===== */
     const now = Date.now()
     const timestamps = ipRequests.get(ip) || []
+    const recent = timestamps.filter((t) => now - t < WINDOW_MS)
 
-    // Remove old requests
-    const recentRequests = timestamps.filter(
-      (time) => now - time < WINDOW_MS
-    )
-
-    // Check rate limit
-    if (recentRequests.length >= RATE_LIMIT) {
+    if (recent.length >= RATE_LIMIT) {
       return NextResponse.json(
-        {
-          reply:
-            "You’re sending messages very quickly. Please slow down and take a breath 🌱"
-        },
+        { reply: "Let’s slow down for a moment 🌱 I’m still here." },
         { status: 429 }
       )
     }
 
-    // Save request
-    recentRequests.push(now)
-    ipRequests.set(ip, recentRequests)
+    recent.push(now)
+    ipRequests.set(ip, recent)
 
-    // ===== READ MESSAGE =====
+    /* ===== MESSAGE ===== */
     const { message } = await req.json()
 
-    // ===== SAFETY FILTER =====
+    /* ===== SAFETY FILTER ===== */
     const unsafeKeywords = [
       "suicide",
       "kill",
       "self-harm",
-      "harm",
       "die",
       "weapon",
       "overdose"
     ]
 
-    if (
-      unsafeKeywords.some((word) =>
-        message.toLowerCase().includes(word)
-      )
-    ) {
+    if (unsafeKeywords.some((w) => message.toLowerCase().includes(w))) {
       return NextResponse.json({
         reply:
-          "I’m really glad you reached out. I can’t help with unsafe topics, but you deserve care and support. Please talk to a trusted adult or professional."
+          "I’m really glad you reached out. I can’t help with unsafe topics, but you deserve care and support. Please talk to a trusted adult or local professional."
       })
     }
 
+    /* ===== MEMORY ===== */
+    const history = conversationMemory.get(ip) || []
+    const updatedHistory = [...history, `User: ${message}`].slice(-MAX_MEMORY)
+    conversationMemory.set(ip, updatedHistory)
+
     let reply = ""
 
-    // ===== TRY OPENAI FIRST =====
+    /* ===== OPENAI (PRIMARY) ===== */
     try {
       if (process.env.OPENAI_API_KEY) {
         const openaiRes = await fetch(
@@ -86,8 +90,12 @@ export async function POST(req) {
                 {
                   role: "system",
                   content:
-                    "You are a calm, kind, encouraging guide. Never give medical advice."
+                    "You are a calm, kind guide. No medical advice. Ask gentle questions."
                 },
+                ...updatedHistory.map((m) => ({
+                  role: m.startsWith("User") ? "user" : "assistant",
+                  content: m.replace("User: ", "")
+                })),
                 { role: "user", content: message }
               ],
               max_tokens: 150
@@ -98,11 +106,9 @@ export async function POST(req) {
         const data = await openaiRes.json()
         reply = data.choices?.[0]?.message?.content
       }
-    } catch {
-      // silently fail to fallback
-    }
+    } catch {}
 
-    // ===== HUGGING FACE FALLBACK =====
+    /* ===== HUGGING FACE (FALLBACK) ===== */
     if (!reply) {
       try {
         const hfRes = await fetch(HF_MODEL_URL, {
@@ -114,29 +120,31 @@ export async function POST(req) {
             })
           },
           body: JSON.stringify({
-            inputs: `Encourage the user kindly: ${message}`
+            inputs: updatedHistory.join("\n") + `\nUser: ${message}`
           })
         })
 
         const hfData = await hfRes.json()
-        reply = hfData?.[0]?.generated_text
-      } catch {
-        // continue to final fallback
-      }
+        reply = hfData?.generated_text || hfData?.[0]?.generated_text
+      } catch {}
     }
 
-    // ===== FINAL SAFE FALLBACK =====
+    /* ===== FINAL FALLBACK ===== */
     if (!reply) {
       reply =
-        "I’m here with you. Even when words are hard, your life has meaning."
+        fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)]
     }
+
+    conversationMemory.set(
+      ip,
+      [...updatedHistory, `Guide: ${reply}`].slice(-MAX_MEMORY)
+    )
 
     return NextResponse.json({ reply })
 
-  } catch (err) {
+  } catch {
     return NextResponse.json({
-      reply:
-        "Something went wrong, but I’m still here with you."
+      reply: "I’m here with you. Something went wrong, but you’re not alone."
     })
   }
 }
