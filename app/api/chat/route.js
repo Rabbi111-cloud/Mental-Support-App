@@ -40,8 +40,11 @@ function detectStage(msg) {
   return "early"
 }
 
+/* ================= CORE RESPONSE LOGIC ================= */
+
 function buildResponse(userMessage, aiText, history, stage) {
   const msg = userMessage.toLowerCase().trim()
+
   const lastUser =
     [...history]
       .reverse()
@@ -51,30 +54,56 @@ function buildResponse(userMessage, aiText, history, stage) {
 
   /* ---------- GREETINGS (ONLY AT START) ---------- */
   if (["hi", "hello", "hey"].includes(msg) && history.length < 2) {
-    return "Hi 🙂 I’m really glad you reached out. Take your time — how are you feeling today?"
+    return "Hi 🙂 I’m really glad you reached out. How are you feeling today?"
   }
 
   /* ---------- SOCIAL REPLIES ---------- */
-  if (msg.includes("and you") || msg === "i am fine" || msg === "fine") {
-    return "Thanks for asking 🙂 I’m here with you. What would you like us to talk about today?"
+  if (msg.includes("and you")) {
+    return "Thanks for asking 🙂 I’m here with you. What would you like to talk about?"
   }
 
-  /* ---------- JOB LOSS ---------- */
+  /* ---------- FIRST-PERSON: FEELING NOT GOOD ---------- */
+  if (
+    msg.includes("not feeling too good") ||
+    msg.includes("not feeling good") ||
+    msg.includes("not too good today")
+  ) {
+    stageMap.set("stage", "deep")
+    return (
+      "I’m sorry you’re feeling this way. Some days can feel heavier than others. " +
+      "Do you want to tell me what’s been making today hard?"
+    )
+  }
+
+  /* ---------- FIRST-PERSON: DEPRESSION ---------- */
+  if (msg.includes("depressed")) {
+    stageMap.set("stage", "deep")
+    return (
+      "I’m really sorry you’re feeling this way. Depression can make even small things feel exhausting. " +
+      "You don’t have to explain everything at once — what’s been weighing on you the most?"
+    )
+  }
+
+  /* ---------- FIRST-PERSON: JOB LOSS ---------- */
   if (msg.includes("lost my job")) {
     stageMap.set("stage", "deep")
     return (
       "I’m really sorry — losing a job can shake your confidence and sense of direction. " +
       "It makes sense that this would weigh heavily on you. " +
-      "What part of this feels hardest right now: the uncertainty, the financial pressure, or how it’s affected how you see yourself?"
+      "What part of this feels hardest right now?"
     )
   }
 
-  /* ---------- DEPRESSION ---------- */
-  if (msg.includes("depressed")) {
-    stageMap.set("stage", "deep")
+  /* ---------- THIRD-PERSON: FRIEND LOST JOB ---------- */
+  if (
+    msg.includes("a friend") &&
+    msg.includes("lost") &&
+    msg.includes("job")
+  ) {
     return (
-      "I’m really sorry you’re feeling this way. Depression can make even small things feel exhausting. " +
-      "You don’t have to explain everything at once. What’s been weighing on you the most lately?"
+      "It’s kind of you to want to support your friend. When someone loses a job, what usually helps most " +
+      "is feeling understood rather than fixed. You could start by listening and letting her know her feelings make sense. " +
+      "Would you like help finding gentle words you could say to her?"
     )
   }
 
@@ -82,22 +111,22 @@ function buildResponse(userMessage, aiText, history, stage) {
   if (lastUser.includes("lost my job") && msg.includes("what do i do")) {
     return (
       "That’s a very real question, and it’s okay not to have answers right away. " +
-      "Before we think about next steps, can you tell me what feels most overwhelming right now?"
+      "Before thinking about next steps, what feels most overwhelming right now?"
     )
   }
 
   /* ---------- GROUNDING STAGE ---------- */
   if (stage === "grounding") {
     return (
-      "It sounds like things feel like a lot right now. Let’s slow this down together for a moment. " +
-      "As you’re reading this, try taking one gentle breath. What’s one small thing that feels a little heavy right now?"
+      "It sounds like things feel like a lot right now. Let’s slow this down together. " +
+      "As you’re reading this, try taking one gentle breath. What feels heaviest in this moment?"
     )
   }
 
-  /* ---------- WEAK AI OUTPUT ---------- */
+  /* ---------- WEAK AI OUTPUT FALLBACK ---------- */
   if (!aiText || aiText.length < 30) {
     if (stage === "early") {
-      return "I’m here with you. What’s been on your mind lately?"
+      return "I’m here with you. What would you like us to focus on right now?"
     }
     return "I’m listening. What feels hardest for you right now?"
   }
