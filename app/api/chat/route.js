@@ -6,7 +6,7 @@ export async function POST(req) {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type":"application/json", Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}` },
+      headers: { "Content-Type":"application/json", Authorization:`Bearer ${OPENROUTER_API_KEY}` },
       body: JSON.stringify({ model:"gpt-4o-mini", messages:[{ role:"user", content:message }] })
     })
     const data = await res.json()
