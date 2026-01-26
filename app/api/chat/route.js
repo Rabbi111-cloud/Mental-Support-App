@@ -6,197 +6,169 @@ const WINDOW_MS = 60 * 1000
 const ipRequests = new Map()
 
 /* ================= MEMORY ================= */
-const conversationMemory = new Map()
+const memory = new Map()
 const MAX_MEMORY = 5
 
-/* ================= MODELS ================= */
-const HF_MODEL_URL =
+/* ================= HUGGING FACE ================= */
+const HF_MODEL =
   "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
 const HF_API_KEY = process.env.HF_API_KEY || ""
 
-/* ================= FALLBACK QUESTIONS ================= */
-const followUpQuestions = [
-  "What part of that feels most heavy right now?",
-  "How long have you been feeling this way?",
-  "What do you think triggered this feeling?",
-  "What usually helps you, even a little?",
-  "Do you want to talk about what happened today?"
-]
+/* ================= HELPERS ================= */
 
-/* ================= CONVERSATION ENFORCER ================= */
-function enforceConversation(userMessage, aiText) {
-  const question =
-    followUpQuestions[
-      Math.floor(Math.random() * followUpQuestions.length)
-    ]
+function isGreeting(msg) {
+  return ["hi", "hello", "hey", "good morning", "good evening"].includes(msg)
+}
 
-  // If AI text is weak, generic, or repetitive
-  if (
-    !aiText ||
-    aiText.length < 20 ||
-    aiText.toLowerCase().includes("i’m here with you") ||
-    aiText.toLowerCase().includes("you are not alone")
-  ) {
-    return `I hear you. When you say "${userMessage}", ${question.toLowerCase()}`
+function detectEmotion(msg) {
+  if (msg.includes("suicide") || msg.includes("kill myself")) return "crisis"
+  if (msg.includes("depressed") || msg.includes("hopeless")) return "depressed"
+  if (msg.includes("sad") || msg.includes("cry")) return "sad"
+  if (msg.includes("angry") || msg.includes("mad")) return "angry"
+  if (msg.includes("empty") || msg.includes("numb")) return "numb"
+  return "neutral"
+}
+
+/* ================= CORE CONVERSATION ENFORCER ================= */
+
+function buildResponse(userMessage, aiText) {
+  const msg = userMessage.toLowerCase().trim()
+  const emotion = detectEmotion(msg)
+
+  /* ---- GREETING ---- */
+  if (isGreeting(msg)) {
+    return "Hi 🙂 I’m really glad you reached out. How are you feeling today?"
   }
 
-  // If AI did not ask a question, add one
-  if (!aiText.includes("?")) {
-    return `${aiText} ${question}`
+  /* ---- CRISIS ---- */
+  if (emotion === "crisis") {
+    return (
+      "I’m really glad you told me this. I can’t help with anything that could harm you, " +
+      "but you don’t have to go through this alone. Please consider reaching out to a trusted adult, " +
+      "a family member, or a local support line right now."
+    )
+  }
+
+  /* ---- DEPRESSED ---- */
+  if (emotion === "depressed") {
+    return (
+      "I’m really sorry you’re feeling this way. Depression can make everything feel heavy and exhausting. " +
+      "Do you want to tell me what’s been weighing on you the most?"
+    )
+  }
+
+  /* ---- SAD ---- */
+  if (emotion === "sad") {
+    return (
+      "That sounds really hard. Feeling sad can be draining. " +
+      "What do you think has been affecting you lately?"
+    )
+  }
+
+  /* ---- NUMB ---- */
+  if (emotion === "numb") {
+    return (
+      "Feeling numb can be confusing and lonely. Sometimes it’s a sign you’ve been overwhelmed for a while. " +
+      "When did you first notice this feeling?"
+    )
+  }
+
+  /* ---- ANGRY ---- */
+  if (emotion === "angry") {
+    return (
+      "It sounds like there’s a lot of frustration there. Anger often shows up when something feels unfair or painful. " +
+      "Do you want to talk about what triggered it?"
+    )
+  }
+
+  /* ---- WEAK AI OUTPUT ---- */
+  if (!aiText || aiText.length < 20) {
+    return "I’m listening. What’s been on your mind lately?"
+  }
+
+  /* ---- LIMIT QUESTIONS ---- */
+  const parts = aiText.split("?")
+  if (parts.length > 2) {
+    return parts[0] + "?"
   }
 
   return aiText
 }
 
 /* ================= API HANDLER ================= */
+
 export async function POST(req) {
   try {
-    /* ===== IP ===== */
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
       "unknown"
 
-    /* ===== RATE LIMIT ===== */
+    /* ---- RATE LIMIT ---- */
     const now = Date.now()
-    const timestamps = ipRequests.get(ip) || []
-    const recent = timestamps.filter((t) => now - t < WINDOW_MS)
+    const times = ipRequests.get(ip) || []
+    const recent = times.filter((t) => now - t < WINDOW_MS)
 
     if (recent.length >= RATE_LIMIT) {
-      return NextResponse.json(
-        { reply: "Let’s slow down a little 🌱 I’m still here." },
-        { status: 429 }
-      )
+      return NextResponse.json({
+        reply: "Let’s slow things down a bit 🌱 I’m still here with you."
+      })
     }
 
     recent.push(now)
     ipRequests.set(ip, recent)
 
-    /* ===== MESSAGE ===== */
+    /* ---- MESSAGE ---- */
     const { message } = await req.json()
 
-    /* ===== SAFETY FILTER ===== */
-    const unsafeKeywords = [
-      "suicide",
-      "kill",
-      "self-harm",
-      "die",
-      "weapon",
-      "overdose"
-    ]
+    /* ---- MEMORY ---- */
+    const history = memory.get(ip) || []
+    const updated = [...history, `User: ${message}`].slice(-MAX_MEMORY)
+    memory.set(ip, updated)
 
-    if (unsafeKeywords.some((w) => message.toLowerCase().includes(w))) {
-      return NextResponse.json({
-        reply:
-          "I’m really glad you reached out. I can’t help with unsafe topics, but you deserve care and support. Please reach out to a trusted adult or local professional."
-      })
-    }
+    let aiText = ""
 
-    /* ===== MEMORY ===== */
-    const history = conversationMemory.get(ip) || []
-    const updatedHistory = [...history, `User: ${message}`].slice(-MAX_MEMORY)
-    conversationMemory.set(ip, updatedHistory)
-
-    let reply = ""
-
-    /* ================= OPENAI (PRIMARY) ================= */
+    /* ---- HUGGING FACE RAW TEXT ---- */
     try {
-      if (process.env.OPENAI_API_KEY) {
-        const openaiRes = await fetch(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-              model: "gpt-4",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a calm, empathetic guide. Ask one gentle follow-up question. No medical advice."
-                },
-                ...updatedHistory.map((m) => ({
-                  role: m.startsWith("User") ? "user" : "assistant",
-                  content: m.replace("User: ", "").replace("Guide: ", "")
-                })),
-                { role: "user", content: message }
-              ],
-              max_tokens: 150
-            })
+      const prompt = [
+        "User: Hi",
+        "Guide: Hi, I’m here to listen.",
+        ...updated,
+        "Guide:"
+      ].join("\n")
+
+      const res = await fetch(HF_MODEL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(HF_API_KEY && { Authorization: `Bearer ${HF_API_KEY}` })
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: {
+            max_new_tokens: 80,
+            temperature: 0.8,
+            repetition_penalty: 1.2,
+            return_full_text: false
           }
-        )
-
-        const data = await openaiRes.json()
-        reply = data.choices?.[0]?.message?.content
-      }
-    } catch {
-      // fall through
-    }
-
-    /* ================= HUGGING FACE (RAW TEXT ONLY) ================= */
-    if (!reply) {
-      try {
-        const conversation = [
-          "User: Hi",
-          "Guide: Hi, I’m here with you. What’s been on your mind?",
-          ...updatedHistory,
-          `User: ${message}`,
-          "Guide:"
-        ].join("\n")
-
-        const hfRes = await fetch(HF_MODEL_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(HF_API_KEY && {
-              Authorization: `Bearer ${HF_API_KEY}`
-            })
-          },
-          body: JSON.stringify({
-            inputs: conversation,
-            parameters: {
-              max_new_tokens: 80,
-              temperature: 0.8,
-              repetition_penalty: 1.2,
-              return_full_text: false
-            }
-          })
         })
+      })
 
-        const hfData = await hfRes.json()
-        reply =
-          hfData?.generated_text ||
-          hfData?.[0]?.generated_text
-      } catch {
-        reply = ""
-      }
+      const data = await res.json()
+      aiText = data?.generated_text || data?.[0]?.generated_text || ""
+    } catch {
+      aiText = ""
     }
 
-    /* ===== CLEAN OUTPUT ===== */
-    if (reply) {
-      reply = reply
-        .replace(/User:.*$/gi, "")
-        .replace(/Guide:/gi, "")
-        .trim()
-    }
+    /* ---- FINAL RESPONSE ---- */
+    const reply = buildResponse(message, aiText)
 
-    /* ===== ENFORCE CONVERSATION (CRITICAL FIX) ===== */
-    reply = enforceConversation(message, reply)
-
-    conversationMemory.set(
-      ip,
-      [...updatedHistory, `Guide: ${reply}`].slice(-MAX_MEMORY)
-    )
+    memory.set(ip, [...updated, `Guide: ${reply}`].slice(-MAX_MEMORY))
 
     return NextResponse.json({ reply })
-
   } catch {
     return NextResponse.json({
-      reply:
-        "I’m here with you. Something went wrong, but you’re not alone."
+      reply: "I’m here with you. Something went wrong, but you’re not alone."
     })
   }
 }
