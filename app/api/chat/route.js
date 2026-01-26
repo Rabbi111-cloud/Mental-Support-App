@@ -7,7 +7,11 @@ const ipRequests = new Map()
 
 /* ================= MEMORY ================= */
 const memory = new Map()
-const MAX_MEMORY = 5
+const MAX_MEMORY = 6
+
+/* ================= STAGE TRACKING ================= */
+const stageMap = new Map()
+// stages: "early" | "deep" | "grounding"
 
 /* ================= HUGGING FACE ================= */
 const HF_MODEL =
@@ -16,77 +20,89 @@ const HF_API_KEY = process.env.HF_API_KEY || ""
 
 /* ================= HELPERS ================= */
 
-function isGreeting(msg) {
-  return ["hi", "hello", "hey", "good morning", "good evening"].includes(msg)
+function detectStage(msg) {
+  if (
+    msg.includes("depressed") ||
+    msg.includes("lost my job") ||
+    msg.includes("hopeless")
+  ) {
+    return "deep"
+  }
+
+  if (
+    msg.includes("overwhelmed") ||
+    msg.includes("too much") ||
+    msg.includes("tired")
+  ) {
+    return "grounding"
+  }
+
+  return "early"
 }
 
-function detectEmotion(msg) {
-  if (msg.includes("suicide") || msg.includes("kill myself")) return "crisis"
-  if (msg.includes("depressed") || msg.includes("hopeless")) return "depressed"
-  if (msg.includes("sad") || msg.includes("cry")) return "sad"
-  if (msg.includes("angry") || msg.includes("mad")) return "angry"
-  if (msg.includes("empty") || msg.includes("numb")) return "numb"
-  return "neutral"
-}
-
-/* ================= CORE CONVERSATION ENFORCER ================= */
-
-function buildResponse(userMessage, aiText) {
+function buildResponse(userMessage, aiText, history, stage) {
   const msg = userMessage.toLowerCase().trim()
-  const emotion = detectEmotion(msg)
+  const lastUser =
+    [...history]
+      .reverse()
+      .find((m) => m.startsWith("User:"))
+      ?.replace("User: ", "")
+      .toLowerCase() || ""
 
-  /* ---- GREETING ---- */
-  if (isGreeting(msg)) {
-    return "Hi 🙂 I’m really glad you reached out. How are you feeling today?"
+  /* ---------- GREETINGS (ONLY AT START) ---------- */
+  if (["hi", "hello", "hey"].includes(msg) && history.length < 2) {
+    return "Hi 🙂 I’m really glad you reached out. Take your time — how are you feeling today?"
   }
 
-  /* ---- CRISIS ---- */
-  if (emotion === "crisis") {
+  /* ---------- SOCIAL REPLIES ---------- */
+  if (msg.includes("and you") || msg === "i am fine" || msg === "fine") {
+    return "Thanks for asking 🙂 I’m here with you. What would you like us to talk about today?"
+  }
+
+  /* ---------- JOB LOSS ---------- */
+  if (msg.includes("lost my job")) {
+    stageMap.set("stage", "deep")
     return (
-      "I’m really glad you told me this. I can’t help with anything that could harm you, " +
-      "but you don’t have to go through this alone. Please consider reaching out to a trusted adult, " +
-      "a family member, or a local support line right now."
+      "I’m really sorry — losing a job can shake your confidence and sense of direction. " +
+      "It makes sense that this would weigh heavily on you. " +
+      "What part of this feels hardest right now: the uncertainty, the financial pressure, or how it’s affected how you see yourself?"
     )
   }
 
-  /* ---- DEPRESSED ---- */
-  if (emotion === "depressed") {
+  /* ---------- DEPRESSION ---------- */
+  if (msg.includes("depressed")) {
+    stageMap.set("stage", "deep")
     return (
-      "I’m really sorry you’re feeling this way. Depression can make everything feel heavy and exhausting. " +
-      "Do you want to tell me what’s been weighing on you the most?"
+      "I’m really sorry you’re feeling this way. Depression can make even small things feel exhausting. " +
+      "You don’t have to explain everything at once. What’s been weighing on you the most lately?"
     )
   }
 
-  /* ---- SAD ---- */
-  if (emotion === "sad") {
+  /* ---------- FOLLOW-UP AFTER JOB LOSS ---------- */
+  if (lastUser.includes("lost my job") && msg.includes("what do i do")) {
     return (
-      "That sounds really hard. Feeling sad can be draining. " +
-      "What do you think has been affecting you lately?"
+      "That’s a very real question, and it’s okay not to have answers right away. " +
+      "Before we think about next steps, can you tell me what feels most overwhelming right now?"
     )
   }
 
-  /* ---- NUMB ---- */
-  if (emotion === "numb") {
+  /* ---------- GROUNDING STAGE ---------- */
+  if (stage === "grounding") {
     return (
-      "Feeling numb can be confusing and lonely. Sometimes it’s a sign you’ve been overwhelmed for a while. " +
-      "When did you first notice this feeling?"
+      "It sounds like things feel like a lot right now. Let’s slow this down together for a moment. " +
+      "As you’re reading this, try taking one gentle breath. What’s one small thing that feels a little heavy right now?"
     )
   }
 
-  /* ---- ANGRY ---- */
-  if (emotion === "angry") {
-    return (
-      "It sounds like there’s a lot of frustration there. Anger often shows up when something feels unfair or painful. " +
-      "Do you want to talk about what triggered it?"
-    )
+  /* ---------- WEAK AI OUTPUT ---------- */
+  if (!aiText || aiText.length < 30) {
+    if (stage === "early") {
+      return "I’m here with you. What’s been on your mind lately?"
+    }
+    return "I’m listening. What feels hardest for you right now?"
   }
 
-  /* ---- WEAK AI OUTPUT ---- */
-  if (!aiText || aiText.length < 20) {
-    return "I’m listening. What’s been on your mind lately?"
-  }
-
-  /* ---- LIMIT QUESTIONS ---- */
+  /* ---------- LIMIT QUESTIONS ---------- */
   const parts = aiText.split("?")
   if (parts.length > 2) {
     return parts[0] + "?"
@@ -101,7 +117,6 @@ export async function POST(req) {
   try {
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
-      req.headers.get("x-real-ip") ||
       "unknown"
 
     /* ---- RATE LIMIT ---- */
@@ -118,8 +133,14 @@ export async function POST(req) {
     recent.push(now)
     ipRequests.set(ip, recent)
 
-    /* ---- MESSAGE ---- */
     const { message } = await req.json()
+    const msg = message.toLowerCase()
+
+    /* ---- STAGE ---- */
+    const prevStage = stageMap.get(ip) || "early"
+    const newStage = detectStage(msg)
+    const stage = newStage === "early" ? prevStage : newStage
+    stageMap.set(ip, stage)
 
     /* ---- MEMORY ---- */
     const history = memory.get(ip) || []
@@ -132,7 +153,7 @@ export async function POST(req) {
     try {
       const prompt = [
         "User: Hi",
-        "Guide: Hi, I’m here to listen.",
+        "Guide: Hi, I’m here to listen and support.",
         ...updated,
         "Guide:"
       ].join("\n")
@@ -160,8 +181,7 @@ export async function POST(req) {
       aiText = ""
     }
 
-    /* ---- FINAL RESPONSE ---- */
-    const reply = buildResponse(message, aiText)
+    const reply = buildResponse(message, aiText, updated, stage)
 
     memory.set(ip, [...updated, `Guide: ${reply}`].slice(-MAX_MEMORY))
 
