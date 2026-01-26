@@ -1,21 +1,21 @@
 "use client"
 import { useState } from "react"
 import { auth } from "../../lib/firebase"
-import { createUserWithEmailAndPassword } from "firebase/auth"
+import { signInWithEmailAndPassword } from "firebase/auth"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
-export default function SignupPage() {
+export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
 
-  const handleSignup = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
-      router.push("/login")
+      await signInWithEmailAndPassword(auth, email, password)
+      router.push("/chat")
     } catch (err) {
       setError(err.message)
     }
@@ -23,9 +23,9 @@ export default function SignupPage() {
 
   return (
     <main style={{ maxWidth: 400, margin: "auto", padding: 40 }}>
-      <h2>Sign Up</h2>
+      <h2>Login</h2>
       <form
-        onSubmit={handleSignup}
+        onSubmit={handleLogin}
         style={{ display: "flex", flexDirection: "column", gap: 10 }}
       >
         <input
@@ -42,11 +42,11 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <button type="submit">Sign Up</button>
+        <button type="submit">Login</button>
         {error && <p style={{ color: "red" }}>{error}</p>}
       </form>
       <p>
-        Already have an account? <Link href="/login">Login</Link>
+        Don’t have an account? <Link href="/signup">Sign up</Link>
       </p>
     </main>
   )
