@@ -1,44 +1,26 @@
 "use client"
-
 import Link from "next/link"
+import { auth } from "../../lib/firebase"
+import { signOut } from "firebase/auth"
 
 export default function Onboarding() {
+  async function handleLogout() {
+    await signOut(auth)
+    window.location.href = "/login"
+  }
+
   return (
-    <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
+    <main style={{ maxWidth:600, margin:"0 auto", padding:20 }}>
       <h2>Welcome 🌱</h2>
+      <p>This chatbot is for calm support and encouragement.</p>
+      <p style={{color:"gray"}}>It is not a therapist. If things get serious, contact someone you trust or a professional.</p>
 
-      <p>
-        This space is designed to offer calm support, encouragement,
-        and reflection when things feel heavy.
-      </p>
-
-      <p style={{ color: "gray" }}>
-        This chatbot is not a therapist or medical professional.
-        It does not replace real-life support, but it can help you
-        feel less alone and think things through gently.
-      </p>
-
-      <p style={{ color: "gray" }}>
-        If you ever feel unsafe or overwhelmed, please consider
-        reaching out to someone you trust or a local support service.
-      </p>
-
-      <Link href="/chat">
-        <button
-          style={{
-            marginTop: 20,
-            padding: 12,
-            width: "100%",
-            background: "#16a34a",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            fontWeight: "bold"
-          }}
-        >
-          I Understand — Start Chat
-        </button>
-      </Link>
+      <div style={{display:"flex", gap:10, marginTop:20}}>
+        <Link href="/chat">
+          <button style={{padding:12, background:"#16a34a", color:"white", border:"none", borderRadius:6}}>Start Chat</button>
+        </Link>
+        <button onClick={handleLogout} style={{padding:12, background:"#ef4444", color:"white", border:"none", borderRadius:6}}>Logout</button>
+      </div>
     </main>
   )
 }
