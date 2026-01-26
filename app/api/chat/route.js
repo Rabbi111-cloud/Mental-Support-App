@@ -14,18 +14,44 @@ const HF_MODEL_URL =
   "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
 const HF_API_KEY = process.env.HF_API_KEY || ""
 
-/* ================= FALLBACKS ================= */
-const fallbackReplies = [
-  "I’m here with you. What’s been on your mind lately?",
-  "Thank you for telling me that. Do you want to talk more about it?",
-  "That sounds difficult. How long have you been feeling this way?",
-  "I’m listening. What feels hardest right now?",
-  "You don’t have to go through this alone. Tell me more."
+/* ================= FALLBACK QUESTIONS ================= */
+const followUpQuestions = [
+  "What part of that feels most heavy right now?",
+  "How long have you been feeling this way?",
+  "What do you think triggered this feeling?",
+  "What usually helps you, even a little?",
+  "Do you want to talk about what happened today?"
 ]
 
+/* ================= CONVERSATION ENFORCER ================= */
+function enforceConversation(userMessage, aiText) {
+  const question =
+    followUpQuestions[
+      Math.floor(Math.random() * followUpQuestions.length)
+    ]
+
+  // If AI text is weak, generic, or repetitive
+  if (
+    !aiText ||
+    aiText.length < 20 ||
+    aiText.toLowerCase().includes("i’m here with you") ||
+    aiText.toLowerCase().includes("you are not alone")
+  ) {
+    return `I hear you. When you say "${userMessage}", ${question.toLowerCase()}`
+  }
+
+  // If AI did not ask a question, add one
+  if (!aiText.includes("?")) {
+    return `${aiText} ${question}`
+  }
+
+  return aiText
+}
+
+/* ================= API HANDLER ================= */
 export async function POST(req) {
   try {
-    /* ===== GET IP ===== */
+    /* ===== IP ===== */
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
@@ -38,7 +64,7 @@ export async function POST(req) {
 
     if (recent.length >= RATE_LIMIT) {
       return NextResponse.json(
-        { reply: "Let’s slow down a little 🌱 I’m still here with you." },
+        { reply: "Let’s slow down a little 🌱 I’m still here." },
         { status: 429 }
       )
     }
@@ -46,7 +72,7 @@ export async function POST(req) {
     recent.push(now)
     ipRequests.set(ip, recent)
 
-    /* ===== READ MESSAGE ===== */
+    /* ===== MESSAGE ===== */
     const { message } = await req.json()
 
     /* ===== SAFETY FILTER ===== */
@@ -90,7 +116,7 @@ export async function POST(req) {
                 {
                   role: "system",
                   content:
-                    "You are a calm, empathetic guide. Ask gentle follow-up questions. No medical advice."
+                    "You are a calm, empathetic guide. Ask one gentle follow-up question. No medical advice."
                 },
                 ...updatedHistory.map((m) => ({
                   role: m.startsWith("User") ? "user" : "assistant",
@@ -107,10 +133,10 @@ export async function POST(req) {
         reply = data.choices?.[0]?.message?.content
       }
     } catch {
-      // silently fall back
+      // fall through
     }
 
-    /* ================= HUGGING FACE (CONVERSATIONAL FIX) ================= */
+    /* ================= HUGGING FACE (RAW TEXT ONLY) ================= */
     if (!reply) {
       try {
         const conversation = [
@@ -145,11 +171,11 @@ export async function POST(req) {
           hfData?.generated_text ||
           hfData?.[0]?.generated_text
       } catch {
-        // continue to fallback
+        reply = ""
       }
     }
 
-    /* ===== CLEAN HF OUTPUT ===== */
+    /* ===== CLEAN OUTPUT ===== */
     if (reply) {
       reply = reply
         .replace(/User:.*$/gi, "")
@@ -157,11 +183,8 @@ export async function POST(req) {
         .trim()
     }
 
-    /* ===== FINAL FALLBACK ===== */
-    if (!reply) {
-      reply =
-        fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)]
-    }
+    /* ===== ENFORCE CONVERSATION (CRITICAL FIX) ===== */
+    reply = enforceConversation(message, reply)
 
     conversationMemory.set(
       ip,
@@ -172,7 +195,8 @@ export async function POST(req) {
 
   } catch {
     return NextResponse.json({
-      reply: "I’m here with you. Something went wrong, but you’re not alone."
+      reply:
+        "I’m here with you. Something went wrong, but you’re not alone."
     })
   }
 }
