@@ -1,19 +1,37 @@
 "use client"
-import { useState, useEffect } from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { auth, db } from "../../lib/firebase"
-import { collection, addDoc, query, orderBy, getDocs } from "firebase/firestore"
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  getDocs,
+} from "firebase/firestore"
 
 export default function Chat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
+  const messagesEndRef = useRef(null)
 
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Load chat history from Firebase
   async function loadMessages() {
     const user = auth.currentUser
     if (!user) return
-    const q = query(collection(db, "chats"), orderBy("created_at", "asc"))
+
+    const q = query(
+      collection(db, "chats"),
+      orderBy("created_at", "asc")
+    )
     const snapshot = await getDocs(q)
-    const data = snapshot.docs.map(d => d.data())
+    const data = snapshot.docs.map((d) => d.data())
     setMessages(data)
   }
 
@@ -21,14 +39,15 @@ export default function Chat() {
     loadMessages()
   }, [])
 
+  // Send message
   async function sendMessage() {
     if (!input.trim()) return
-
     const userText = input
     setInput("")
     setLoading(true)
 
-    setMessages(prev => [...prev, { role: "user", text: userText }])
+    // Show user message immediately
+    setMessages((prev) => [...prev, { role: "user", text: userText }])
 
     const user = auth.currentUser
     if (!user) {
@@ -36,7 +55,7 @@ export default function Chat() {
       return
     }
 
-    // Save user message
+    // Save user message to Firebase
     await addDoc(collection(db, "chats"), {
       userId: user.uid,
       role: "user",
@@ -58,26 +77,24 @@ export default function Chat() {
         botReply =
           "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
       } else {
-        // 🔵 API call (FIXED ENDPOINT)
+        // 🔵 Call new API
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
         })
 
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`)
-        }
-
         const data = await res.json()
-        botReply = data.reply || "⚠️ Empty reply from API"
+        botReply = data.reply || "🤖 No reply received"
       }
     } catch (err) {
       botReply = "❌ API ERROR: " + err.message
     }
 
-    setMessages(prev => [...prev, { role: "bot", text: botReply }])
+    // Show bot reply
+    setMessages((prev) => [...prev, { role: "bot", text: botReply }])
 
+    // Save bot reply to Firebase
     await addDoc(collection(db, "chats"), {
       userId: user.uid,
       role: "bot",
@@ -89,17 +106,27 @@ export default function Chat() {
   }
 
   return (
-    <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
+    <main
+      style={{
+        maxWidth: 600,
+        margin: "0 auto",
+        padding: 20,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <h2>Support Chat</h2>
 
       <div
         style={{
           border: "1px solid #ddd",
           borderRadius: 10,
-          height: 350,
+          height: 400,
           overflowY: "auto",
           padding: 10,
           background: "#fafafa",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {messages.map((m, i) => (
@@ -117,17 +144,17 @@ export default function Chat() {
             {m.text}
           </div>
         ))}
-
         {loading && (
           <p style={{ color: "gray", fontStyle: "italic" }}>
             Guide is typing...
           </p>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <input
         value={input}
-        onChange={e => setInput(e.target.value)}
+        onChange={(e) => setInput(e.target.value)}
         placeholder="Type your message..."
         style={{
           width: "100%",
@@ -135,6 +162,9 @@ export default function Chat() {
           borderRadius: 6,
           border: "1px solid #ccc",
           marginTop: 10,
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") sendMessage()
         }}
       />
 
@@ -152,24 +182,28 @@ export default function Chat() {
         Send
       </button>
 
-      <button onClick={() => history.back()} style={{ marginTop: 10 }}>
-        Back
-      </button>
-
-      <button
-        onClick={async () => {
-          await auth.signOut()
-          window.location.href = "/login"
-        }}
-        style={{
-          marginTop: 10,
-          padding: 10,
-          background: "#ef4444",
-          color: "white",
-        }}
-      >
-        Logout
-      </button>
+      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+        <button
+          onClick={() => history.back()}
+          style={{ padding: 10, flex: 1 }}
+        >
+          Back
+        </button>
+        <button
+          onClick={async () => {
+            await auth.signOut()
+            window.location.href = "/login"
+          }}
+          style={{
+            padding: 10,
+            flex: 1,
+            background: "#ef4444",
+            color: "white",
+          }}
+        >
+          Logout
+        </button>
+      </div>
     </main>
   )
 }
