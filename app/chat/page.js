@@ -16,7 +16,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom automatically
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
@@ -25,11 +25,7 @@ export default function Chat() {
   async function loadMessages() {
     const user = auth.currentUser
     if (!user) return
-
-    const q = query(
-      collection(db, "chats"),
-      orderBy("created_at", "asc")
-    )
+    const q = query(collection(db, "chats"), orderBy("created_at", "asc"))
     const snapshot = await getDocs(q)
     const data = snapshot.docs.map((d) => d.data())
     setMessages(data)
@@ -39,7 +35,7 @@ export default function Chat() {
     loadMessages()
   }, [])
 
-  // Send message
+  // Send a message
   async function sendMessage() {
     if (!input.trim()) return
     const userText = input
@@ -68,41 +64,48 @@ export default function Chat() {
     try {
       const msgLower = userText.toLowerCase()
 
-      // 🔴 Safety escalation handling
+      // -----------------------------
+      // Safety handling: "I feel worse"
       if (
         msgLower.includes("i feel worse") ||
         msgLower.includes("can't cope") ||
         msgLower.includes("too much for me")
       ) {
         botReply =
-          "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
+          "I’m really glad you told me this. Take a slow breath. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
       } else {
-        // 🔵 Call new API
+        // -----------------------------
+        // Call API
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
         })
 
-        const data = await res.json()
-        botReply = data.reply || "🤖 No reply received"
+        if (!res.ok) {
+          const text = await res.text()
+          botReply = "AI server error: " + text
+        } else {
+          const data = await res.json()
+          botReply = data.reply || "🤖 AI did not reply."
+        }
       }
     } catch (err) {
       botReply = "❌ API ERROR: " + err.message
+    } finally {
+      // -----------------------------
+      // Show bot message and clear loading
+      setMessages((prev) => [...prev, { role: "bot", text: botReply }])
+      setLoading(false)
+
+      // Save bot message to Firebase
+      await addDoc(collection(db, "chats"), {
+        userId: user.uid,
+        role: "bot",
+        text: botReply,
+        created_at: new Date(),
+      })
     }
-
-    // Show bot reply
-    setMessages((prev) => [...prev, { role: "bot", text: botReply }])
-
-    // Save bot reply to Firebase
-    await addDoc(collection(db, "chats"), {
-      userId: user.uid,
-      role: "bot",
-      text: botReply,
-      created_at: new Date(),
-    })
-
-    setLoading(false)
   }
 
   return (
@@ -144,11 +147,13 @@ export default function Chat() {
             {m.text}
           </div>
         ))}
+
         {loading && (
           <p style={{ color: "gray", fontStyle: "italic" }}>
             Guide is typing...
           </p>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
