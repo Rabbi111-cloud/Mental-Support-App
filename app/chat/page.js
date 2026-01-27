@@ -1,105 +1,91 @@
-
 "use client"
 import { useState, useEffect } from "react"
 import { auth, db } from "../../lib/firebase"
-import {
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  where,
-  getDocs,
-} from "firebase/firestore"
+import { collection, addDoc, query, orderBy, getDocs } from "firebase/firestore"
 
 export default function Chat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
 
-  async function loadMessages(user) {
-    const q = query(
-      collection(db, "chats"),
-      where("userId", "==", user.uid),
-      orderBy("created_at", "asc")
-    )
+  async function loadMessages() {
+    const user = auth.currentUser
+    if (!user) return
+    const q = query(collection(db, "chats"), orderBy("created_at", "asc"))
     const snapshot = await getDocs(q)
-    const data = snapshot.docs.map((d) => d.data())
+    const data = snapshot.docs.map(d => d.data())
     setMessages(data)
   }
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged((user) => {
-      if (user) loadMessages(user)
-    })
-    return () => unsub()
+    loadMessages()
   }, [])
 
   async function sendMessage() {
-    if (!input.trim() || loading) return
-
-    const user = auth.currentUser
-    if (!user) {
-      alert("Please log in again.")
-      return
-    }
+    if (!input.trim()) return
 
     const userText = input
     setInput("")
     setLoading(true)
 
-    setMessages((prev) => [...prev, { role: "user", text: userText }])
+    setMessages(prev => [...prev, { role: "user", text: userText }])
+
+    const user = auth.currentUser
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
+    // Save user message
+    await addDoc(collection(db, "chats"), {
+      userId: user.uid,
+      role: "user",
+      text: userText,
+      created_at: new Date(),
+    })
+
+    let botReply = ""
 
     try {
-      await addDoc(collection(db, "chats"), {
-        userId: user.uid,
-        role: "user",
-        text: userText,
-        created_at: new Date(),
-      })
-
-      let botReply = ""
       const msgLower = userText.toLowerCase()
 
-      // 🛑 SAFETY HANDLING
+      // 🔴 Safety escalation handling
       if (
         msgLower.includes("i feel worse") ||
         msgLower.includes("can't cope") ||
         msgLower.includes("too much for me")
       ) {
         botReply =
-          "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what made things feel worse, or focus on calming your mind first?"
+          "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
       } else {
+        // 🔵 API call
         const res = await fetch("/api/chatbot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
         })
 
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`)
+        }
+
         const data = await res.json()
-        botReply = data.reply || "I’m here with you."
+        botReply = data.reply || "⚠️ Empty reply from API"
       }
-
-      setMessages((prev) => [...prev, { role: "bot", text: botReply }])
-
-      await addDoc(collection(db, "chats"), {
-        userId: user.uid,
-        role: "bot",
-        text: botReply,
-        created_at: new Date(),
-      })
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          text:
-            "I’m having trouble responding right now, but I’m still here with you.",
-        },
-      ])
-    } finally {
-      // 🔴 THIS GUARANTEES NO INFINITE TYPING
-      setLoading(false)
+      botReply = "❌ API ERROR: " + err.message
     }
+
+    setMessages(prev => [...prev, { role: "bot", text: botReply }])
+
+    await addDoc(collection(db, "chats"), {
+      userId: user.uid,
+      role: "bot",
+      text: botReply,
+      created_at: new Date(),
+    })
+
+    setLoading(false)
   }
 
   return (
@@ -123,12 +109,15 @@ export default function Chat() {
               marginBottom: 8,
               padding: "8px 12px",
               borderRadius: 12,
+              maxWidth: "80%",
               background: m.role === "user" ? "#dbeafe" : "#e5e7eb",
+              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
             }}
           >
             {m.text}
           </div>
         ))}
+
         {loading && (
           <p style={{ color: "gray", fontStyle: "italic" }}>
             Guide is typing...
@@ -138,7 +127,7 @@ export default function Chat() {
 
       <input
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={e => setInput(e.target.value)}
         placeholder="Type your message..."
         style={{
           width: "100%",
@@ -174,9 +163,9 @@ export default function Chat() {
         }}
         style={{
           marginTop: 10,
+          padding: 10,
           background: "#ef4444",
           color: "white",
-          padding: 10,
         }}
       >
         Logout
@@ -184,4 +173,3 @@ export default function Chat() {
     </main>
   )
 }
-
