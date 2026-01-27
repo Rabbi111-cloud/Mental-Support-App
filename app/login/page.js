@@ -15,7 +15,8 @@ export default function Login() {
     e.preventDefault()
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      router.push("/chat")
+      // ✅ Redirect to onboarding instead of chat
+      router.push("/onboarding")
     } catch (err) {
       setError(err.message)
     }
@@ -28,7 +29,7 @@ export default function Login() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        background: "#f8fafc",
+        background: "#f0f4f8",
         padding: 20,
       }}
     >
@@ -37,17 +38,22 @@ export default function Login() {
           width: "100%",
           maxWidth: 420,
           background: "white",
-          padding: 30,
+          padding: 36,
           borderRadius: 16,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 16,
         }}
       >
-        <h2 style={{ textAlign: "center", color: "#1f2937" }}>Login</h2>
+        <h2 style={{ textAlign: "center", color: "#1f2937", fontSize: 24, fontWeight: "bold" }}>
+          Welcome Back
+        </h2>
+        <p style={{ textAlign: "center", color: "#64748b", fontSize: 14 }}>
+          Login to continue to your Support Guide
+        </p>
 
-        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <input
             type="email"
             placeholder="Email"
@@ -56,9 +62,11 @@ export default function Login() {
             required
             style={{
               width: "100%",
-              padding: 12,
-              borderRadius: 8,
+              padding: 14,
+              borderRadius: 10,
               border: "1px solid #cbd5f5",
+              fontSize: 15,
+              outline: "none",
             }}
           />
           <input
@@ -69,21 +77,24 @@ export default function Login() {
             required
             style={{
               width: "100%",
-              padding: 12,
-              borderRadius: 8,
+              padding: 14,
+              borderRadius: 10,
               border: "1px solid #cbd5f5",
+              fontSize: 15,
+              outline: "none",
             }}
           />
           <button
             type="submit"
             style={{
               width: "100%",
-              padding: 12,
-              borderRadius: 8,
+              padding: 14,
+              borderRadius: 10,
               border: "none",
               background: "#2563eb",
               color: "white",
               fontWeight: "bold",
+              fontSize: 16,
               cursor: "pointer",
             }}
           >
@@ -92,7 +103,7 @@ export default function Login() {
         </form>
 
         {error && (
-          <p style={{ color: "#ef4444", textAlign: "center" }}>{error}</p>
+          <p style={{ color: "#ef4444", textAlign: "center", fontSize: 14 }}>{error}</p>
         )}
 
         <p style={{ textAlign: "center", fontSize: 14, color: "#64748b" }}>
