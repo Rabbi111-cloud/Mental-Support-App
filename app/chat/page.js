@@ -16,34 +16,45 @@ export default function Chat() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  // Scroll to bottom automatically
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Load chat history from Firebase
-  async function loadMessages() {
-    const user = auth.currentUser
-    if (!user) return
-    const q = query(collection(db, "chats"), orderBy("created_at", "asc"))
-    const snapshot = await getDocs(q)
-    const data = snapshot.docs.map((d) => d.data())
-    setMessages(data)
-  }
-
+  // Load chat history
   useEffect(() => {
+    async function loadMessages() {
+      const user = auth.currentUser
+      if (!user) return
+
+      try {
+        const q = query(
+          collection(db, "chats"),
+          orderBy("created_at", "asc")
+        )
+        const snapshot = await getDocs(q)
+        const data = snapshot.docs.map((d) => d.data())
+        setMessages(data)
+      } catch (e) {
+        console.warn("Could not load messages:", e.message)
+      }
+    }
+
     loadMessages()
   }, [])
 
-  // Send a message
   async function sendMessage() {
     if (!input.trim()) return
+
     const userText = input
     setInput("")
     setLoading(true)
 
     // Show user message immediately
-    setMessages((prev) => [...prev, { role: "user", text: userText }])
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: userText },
+    ])
 
     const user = auth.currentUser
     if (!user) {
@@ -51,60 +62,64 @@ export default function Chat() {
       return
     }
 
-    // Save user message to Firebase
-    await addDoc(collection(db, "chats"), {
-      userId: user.uid,
-      role: "user",
-      text: userText,
-      created_at: new Date(),
-    })
-
-    let botReply = ""
+    let assistantReply =
+      "I’m here with you. Take your time — what’s on your mind?"
 
     try {
+      // Save user message (FAIL-SAFE)
+      try {
+        await addDoc(collection(db, "chats"), {
+          userId: user.uid,
+          role: "user",
+          text: userText,
+          created_at: new Date(),
+        })
+      } catch (e) {
+        console.warn("User message not saved:", e.message)
+      }
+
       const msgLower = userText.toLowerCase()
 
-      // -----------------------------
-      // Safety handling: "I feel worse"
+      // Gentle safety handling
       if (
         msgLower.includes("i feel worse") ||
         msgLower.includes("can't cope") ||
         msgLower.includes("too much for me")
       ) {
-        botReply =
-          "I’m really glad you told me this. Take a slow breath. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
+        assistantReply =
+          "I’m really glad you said that. Let’s slow this moment down together. You don’t have to carry everything at once."
       } else {
-        // -----------------------------
-        // Call API
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
         })
 
-        if (!res.ok) {
-          const text = await res.text()
-          botReply = "AI server error: " + text
-        } else {
-          const data = await res.json()
-          botReply = data.reply || "🤖 AI did not reply."
-        }
+        const data = await res.json()
+        assistantReply = data.reply || assistantReply
       }
     } catch (err) {
-      botReply = "❌ API ERROR: " + err.message
+      assistantReply =
+        "I’m here with you. Something didn’t work just now, but you’re not alone."
     } finally {
-      // -----------------------------
-      // Show bot message and clear loading
-      setMessages((prev) => [...prev, { role: "bot", text: botReply }])
+      // ✅ UI ALWAYS recovers
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: assistantReply },
+      ])
       setLoading(false)
 
-      // Save bot message to Firebase
-      await addDoc(collection(db, "chats"), {
-        userId: user.uid,
-        role: "bot",
-        text: botReply,
-        created_at: new Date(),
-      })
+      // Save assistant message (FAIL-SAFE)
+      try {
+        await addDoc(collection(db, "chats"), {
+          userId: user.uid,
+          role: "assistant",
+          text: assistantReply,
+          created_at: new Date(),
+        })
+      } catch (e) {
+        console.warn("Assistant message not saved:", e.message)
+      }
     }
   }
 
@@ -140,8 +155,12 @@ export default function Chat() {
               padding: "8px 12px",
               borderRadius: 12,
               maxWidth: "80%",
-              background: m.role === "user" ? "#dbeafe" : "#e5e7eb",
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+              background:
+                m.role === "user" ? "#dbeafe" : "#e5e7eb",
+              alignSelf:
+                m.role === "user"
+                  ? "flex-end"
+                  : "flex-start",
             }}
           >
             {m.text}
@@ -186,29 +205,6 @@ export default function Chat() {
       >
         Send
       </button>
-
-      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-        <button
-          onClick={() => history.back()}
-          style={{ padding: 10, flex: 1 }}
-        >
-          Back
-        </button>
-        <button
-          onClick={async () => {
-            await auth.signOut()
-            window.location.href = "/login"
-          }}
-          style={{
-            padding: 10,
-            flex: 1,
-            background: "#ef4444",
-            color: "white",
-          }}
-        >
-          Logout
-        </button>
-      </div>
     </main>
   )
 }
