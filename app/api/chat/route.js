@@ -1,22 +1,25 @@
 import { NextResponse } from "next/server"
 
-// ✅ Reads OpenRouter API key from environment variable (set in Vercel)
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-
-export async function GET() {
-  // Simple test endpoint to check API reachability
-  return NextResponse.json({ status: "OK", message: "Chat API reachable" })
-}
-
 export async function POST(req) {
   try {
     const body = await req.json()
-    const userMessage = body.message || ""
+
+    // ✅ ACCEPT BOTH message AND messages (failsafe)
+    const userMessage =
+      body.message ||
+      body.messages?.[body.messages.length - 1]?.content ||
+      ""
+
+    if (!userMessage.trim()) {
+      return NextResponse.json({
+        reply: "I’m here with you. What’s on your mind right now?",
+      })
+    }
 
     const msgLower = userMessage.toLowerCase()
 
     // -------------------------
-    // 2️⃣ SAFETY HANDLING: "I FEEL WORSE"
+    // SAFETY HANDLING
     if (
       msgLower.includes("i feel worse") ||
       msgLower.includes("can't cope") ||
@@ -24,49 +27,68 @@ export async function POST(req) {
     ) {
       return NextResponse.json({
         reply:
-          "I’m really glad you told me this. Take a slow breath. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?",
+          "I’m really glad you said that. Let’s slow this moment down together. You don’t have to fix everything. Would you like to talk about what made today heavier?",
+      })
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({
+        reply:
+          "The guide is temporarily unavailable, but you are not alone. Please try again in a moment.",
       })
     }
 
     // -------------------------
-    // 4️⃣ OPENROUTER AI INTEGRATION
-    if (!OPENROUTER_API_KEY) {
-      console.log("OPENROUTER_API_KEY missing!")
-      return NextResponse.json({
-        reply:
-          "API key missing. Cannot fetch AI reply. Your message was: " + userMessage,
-      })
-    }
+    // OPENROUTER CALL (WITH TIMEOUT)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15_000)
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: userMessage }],
-      }),
-    })
+    const res = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://your-vercel-app.vercel.app",
+          "X-Title": "Mental Health Guide",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a calm, wise, supportive mental health guide. You never judge, never panic, and gently encourage real-world support when appropriate.",
+            },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.7,
+        }),
+        signal: controller.signal,
+      }
+    )
+
+    clearTimeout(timeout)
 
     if (!res.ok) {
-      const text = await res.text()
-      console.log("OpenRouter error:", text)
       return NextResponse.json({
-        reply: "AI server error: " + text,
+        reply:
+          "I’m still here with you. Something didn’t work just now, but we can try again together.",
       })
     }
 
     const data = await res.json()
-    const aiReply = data?.choices?.[0]?.message?.content || "🤖 AI did not reply."
+    const aiReply =
+      data?.choices?.[0]?.message?.content ||
+      "I’m here and listening. Tell me a little more."
 
     return NextResponse.json({ reply: aiReply })
   } catch (err) {
-    console.error("API POST error:", err)
-    return NextResponse.json(
-      { reply: "❌ API ERROR: " + err.message },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      reply:
+        "I’m here with you. Let’s pause for a moment and try again when you’re ready.",
+    })
   }
 }
