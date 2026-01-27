@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
-export async function POST(req) {
+export async function POST() {
   return NextResponse.json({
-    reply: "✅ API is working. This is a test response."
+    reply: "✅ CHATBOT API RESPONDED SUCCESSFULLY",
   })
 }
