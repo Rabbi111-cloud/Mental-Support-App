@@ -13,29 +13,31 @@ export default function MoodTracker() {
 
   const saveMood = async () => {
     if (!mood) {
-      setStatus("Please select your mood first 🌱")
+      setStatus("🌱 Please select your mood first")
       return
     }
 
     const user = auth.currentUser
     if (!user) {
-      setStatus("You must be logged in to save your mood")
+      setStatus("❌ You must be logged in to save your mood")
       return
     }
 
     try {
+      // Save to Firestore with userId to match rules
       await addDoc(collection(db, "moods"), {
         userId: user.uid,
         mood,
         journal,
         createdAt: serverTimestamp(),
       })
-      setStatus("Mood saved successfully 🌸")
+
+      setStatus("🌸 Mood saved successfully!")
       setMood("")
       setJournal("")
     } catch (err) {
-      console.error("Error saving mood:", err)
-      setStatus("Failed to save mood. Please try again ❌")
+      console.error("Error saving mood:", err.code, err.message)
+      setStatus("❌ Failed to save mood. Try again.")
     }
   }
 
@@ -48,9 +50,15 @@ export default function MoodTracker() {
       backgroundColor: "#fff8f0",
       boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
       minHeight: "100vh",
-      color: "#111827"
+      color: "#111827",
+      display: "flex",
+      flexDirection: "column",
+      gap: 16
     }}>
-      <h2 style={{ textAlign: "center", marginBottom: 20 }}>Mood & Journaling</h2>
+      <h2 style={{ textAlign: "center", marginBottom: 10 }}>Mood & Journaling</h2>
+      <p style={{ textAlign: "center", color: "#6b7280" }}>
+        Track your mood and write down your thoughts. 🌿
+      </p>
 
       <select
         value={mood}
@@ -62,6 +70,7 @@ export default function MoodTracker() {
           border: "1px solid #fbbf24",
           marginBottom: 12,
           backgroundColor: "#fff",
+          fontSize: 16
         }}
       >
         <option value="">Select your mood...</option>
@@ -70,6 +79,8 @@ export default function MoodTracker() {
         <option value="anxious">😟 Anxious</option>
         <option value="angry">😡 Angry</option>
         <option value="neutral">😐 Neutral</option>
+        <option value="excited">🤩 Excited</option>
+        <option value="tired">😴 Tired</option>
       </select>
 
       <textarea
@@ -81,9 +92,10 @@ export default function MoodTracker() {
           padding: 12,
           borderRadius: 8,
           border: "1px solid #fbbf24",
-          minHeight: 80,
+          minHeight: 100,
           marginBottom: 12,
           backgroundColor: "#fff",
+          fontSize: 15,
         }}
       />
 
@@ -91,21 +103,25 @@ export default function MoodTracker() {
         onClick={saveMood}
         style={{
           width: "100%",
-          padding: 12,
+          padding: 14,
           borderRadius: 8,
           border: "none",
           backgroundColor: "#f59e0b",
           color: "#111827",
           fontWeight: "bold",
           cursor: "pointer",
-          marginBottom: 10
         }}
       >
         Save Mood
       </button>
 
       {status && (
-        <p style={{ textAlign: "center", marginTop: 10, color: "#6b21a8" }}>
+        <p style={{
+          textAlign: "center",
+          marginTop: 8,
+          color: status.includes("🌸") ? "#059669" : "#ef4444",
+          fontWeight: "500"
+        }}>
           {status}
         </p>
       )}
