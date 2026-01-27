@@ -58,8 +58,8 @@ export default function Chat() {
         botReply =
           "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?"
       } else {
-        // 🔵 API call
-        const res = await fetch("/api/chatbot", {
+        // 🔵 API call (FIXED ENDPOINT)
+        const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userText }),
