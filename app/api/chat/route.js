@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server"
 
-// This is a simple test + final version before adding AI
+// Read OpenRouter API key from environment variable
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+
 export async function GET() {
-  return NextResponse.json({ status: "OK", message: "Chat API reachable" })
+  // Quick test for browser
+  return NextResponse.json({
+    status: "OK",
+    message: "Chat API is reachable",
+  })
 }
 
 export async function POST(req) {
@@ -11,7 +17,7 @@ export async function POST(req) {
     const userMessage = body.message || ""
 
     // -------------------------
-    // SAFETY ESCALATION (I FEEL WORSE)
+    // 1️⃣ Safety Escalation Handling
     const msgLower = userMessage.toLowerCase()
     if (
       msgLower.includes("i feel worse") ||
@@ -25,12 +31,12 @@ export async function POST(req) {
     }
 
     // -------------------------
-    // OpenRouter AI call
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+    // 2️⃣ OpenRouter AI
     if (!OPENROUTER_API_KEY) {
       return NextResponse.json({
         reply:
-          "✅ API works! But no AI key is set. Your message was: " + userMessage,
+          "✅ API works! But no OpenRouter API key is set. Your message was: " +
+          userMessage,
       })
     }
 
@@ -47,7 +53,10 @@ export async function POST(req) {
     })
 
     const data = await res.json()
-    const aiReply = data?.choices?.[0]?.message?.content || "🤖 AI did not reply"
+
+    // Extract AI reply
+    const aiReply =
+      data?.choices?.[0]?.message?.content || "🤖 AI did not reply."
 
     return NextResponse.json({ reply: aiReply })
   } catch (err) {
