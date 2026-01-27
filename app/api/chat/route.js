@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server"
 
-// Read OpenRouter API key from environment variable
+// ✅ Reads OpenRouter API key from environment variable (set in Vercel)
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
 
 export async function GET() {
-  // Quick test for browser
-  return NextResponse.json({
-    status: "OK",
-    message: "Chat API is reachable",
-  })
+  // Simple test endpoint to check API reachability
+  return NextResponse.json({ status: "OK", message: "Chat API reachable" })
 }
 
 export async function POST(req) {
@@ -16,9 +13,10 @@ export async function POST(req) {
     const body = await req.json()
     const userMessage = body.message || ""
 
-    // -------------------------
-    // 1️⃣ Safety Escalation Handling
     const msgLower = userMessage.toLowerCase()
+
+    // -------------------------
+    // 2️⃣ SAFETY HANDLING: "I FEEL WORSE"
     if (
       msgLower.includes("i feel worse") ||
       msgLower.includes("can't cope") ||
@@ -26,17 +24,17 @@ export async function POST(req) {
     ) {
       return NextResponse.json({
         reply:
-          "I’m really glad you told me this. Take a slow breath with me. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?",
+          "I’m really glad you told me this. Take a slow breath. You don’t have to solve everything right now. Would you like to talk about what just changed, or focus on calming your body first?",
       })
     }
 
     // -------------------------
-    // 2️⃣ OpenRouter AI
+    // 4️⃣ OPENROUTER AI INTEGRATION
     if (!OPENROUTER_API_KEY) {
+      console.log("OPENROUTER_API_KEY missing!")
       return NextResponse.json({
         reply:
-          "✅ API works! But no OpenRouter API key is set. Your message was: " +
-          userMessage,
+          "API key missing. Cannot fetch AI reply. Your message was: " + userMessage,
       })
     }
 
@@ -52,14 +50,20 @@ export async function POST(req) {
       }),
     })
 
-    const data = await res.json()
+    if (!res.ok) {
+      const text = await res.text()
+      console.log("OpenRouter error:", text)
+      return NextResponse.json({
+        reply: "AI server error: " + text,
+      })
+    }
 
-    // Extract AI reply
-    const aiReply =
-      data?.choices?.[0]?.message?.content || "🤖 AI did not reply."
+    const data = await res.json()
+    const aiReply = data?.choices?.[0]?.message?.content || "🤖 AI did not reply."
 
     return NextResponse.json({ reply: aiReply })
   } catch (err) {
+    console.error("API POST error:", err)
     return NextResponse.json(
       { reply: "❌ API ERROR: " + err.message },
       { status: 500 }
