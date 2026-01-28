@@ -12,6 +12,7 @@ export default function MoodTracker() {
   const [status, setStatus] = useState("")
 
   const saveMood = async () => {
+    // Ensure a mood is selected
     if (!mood) {
       setStatus("🌱 Please select your mood first")
       return
@@ -24,7 +25,7 @@ export default function MoodTracker() {
     }
 
     try {
-      // Save to Firestore with userId to match rules
+      // 🔑 Firestore write with userId to match rules
       await addDoc(collection(db, "moods"), {
         userId: user.uid,
         mood,
@@ -36,7 +37,7 @@ export default function MoodTracker() {
       setMood("")
       setJournal("")
     } catch (err) {
-      console.error("Error saving mood:", err.code, err.message)
+      console.error("Firestore error:", err.code, err.message)
       setStatus("❌ Failed to save mood. Try again.")
     }
   }
