@@ -22,7 +22,7 @@ export default function MoodTracker() {
         router.push("/login")
       } else {
         setUser(u)
-        console.log("🔥 Authenticated user:", u.uid)
+        console.log("✅ Authenticated:", u.uid)
       }
     })
     return () => unsub()
@@ -47,35 +47,26 @@ export default function MoodTracker() {
     setLoading(true)
     setStatus("")
 
-    const payload = {
-      userId: user.uid,
-      mood,
-      journal: journal.trim(),
-      createdAt: serverTimestamp(),
-    }
-
-    // 🔹 Debug: verify db and collection
-    console.log("🔥 db object:", db)
-    console.log("🔥 collection ref:", collection(db, "moods"))
-    console.log("🔥 payload:", payload)
-
     try {
-      await addDoc(collection(db, "moods"), payload)
+      await addDoc(
+        collection(db, "users", user.uid, "moods"),
+        {
+          mood,
+          journal: journal.trim(),
+          createdAt: serverTimestamp(),
+        }
+      )
 
       setStatus("🌸 Mood saved successfully")
       setMood("")
       setJournal("")
-
-      // Remove any local backup on success
       localStorage.removeItem("mood_backup")
-    } catch (err) {
-      console.error("🔥 Firestore FULL error:", err)
-      console.error("🔥 Error code:", err.code)
-      console.error("🔥 Error message:", err.message)
 
+    } catch (err) {
+      console.error("🔥 Firestore error:", err)
       setStatus(`❌ ${err.code || "Failed to save mood"}`)
 
-      // backup locally
+      // Backup locally (important for mental-health apps)
       localStorage.setItem(
         "mood_backup",
         JSON.stringify({ mood, journal, date: Date.now() })
@@ -85,7 +76,7 @@ export default function MoodTracker() {
     }
   }
 
-  // 🔹 Restore backup if any exists
+  // 🔹 Restore backup if save failed previously
   useEffect(() => {
     const backup = localStorage.getItem("mood_backup")
     if (backup) {
@@ -133,7 +124,7 @@ export default function MoodTracker() {
         value={journal}
         onChange={(e) => setJournal(e.target.value)}
         placeholder="Write your journal entry..."
-        style={{ width: "100%", padding: 12, marginTop: 10 }}
+        style={{ width: "100%", padding: 12, marginTop: 10, minHeight: 120 }}
       />
 
       <button
