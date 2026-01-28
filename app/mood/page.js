@@ -12,22 +12,21 @@ export default function MoodTracker() {
   const [status, setStatus] = useState("")
 
   const saveMood = async () => {
-    // Ensure a mood is selected
-    if (!mood) {
-      setStatus("🌱 Please select your mood first")
-      return
-    }
-
     const user = auth.currentUser
+
     if (!user) {
       setStatus("❌ You must be logged in to save your mood")
       return
     }
 
+    if (!mood) {
+      setStatus("🌱 Please select your mood first")
+      return
+    }
+
     try {
-      // 🔑 Firestore write with userId to match rules
       await addDoc(collection(db, "moods"), {
-        userId: user.uid,
+        userId: user.uid, // 🔑 Must match your Firestore rules
         mood,
         journal,
         createdAt: serverTimestamp(),
@@ -43,22 +42,24 @@ export default function MoodTracker() {
   }
 
   return (
-    <main style={{
-      maxWidth: 500,
-      margin: "20px auto",
-      padding: 20,
-      borderRadius: 12,
-      backgroundColor: "#fff8f0",
-      boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
-      minHeight: "100vh",
-      color: "#111827",
-      display: "flex",
-      flexDirection: "column",
-      gap: 16
-    }}>
+    <main
+      style={{
+        maxWidth: 500,
+        margin: "20px auto",
+        padding: 20,
+        borderRadius: 12,
+        backgroundColor: "#fff8f0",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
+        minHeight: "100vh",
+        color: "#111827",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
       <h2 style={{ textAlign: "center", marginBottom: 10 }}>Mood & Journaling</h2>
       <p style={{ textAlign: "center", color: "#6b7280" }}>
-        Track your mood and write down your thoughts. 🌿
+        Track your mood and write down your thoughts. 🌿 Every entry is private to you.
       </p>
 
       <select
@@ -71,7 +72,7 @@ export default function MoodTracker() {
           border: "1px solid #fbbf24",
           marginBottom: 12,
           backgroundColor: "#fff",
-          fontSize: 16
+          fontSize: 16,
         }}
       >
         <option value="">Select your mood...</option>
@@ -117,12 +118,14 @@ export default function MoodTracker() {
       </button>
 
       {status && (
-        <p style={{
-          textAlign: "center",
-          marginTop: 8,
-          color: status.includes("🌸") ? "#059669" : "#ef4444",
-          fontWeight: "500"
-        }}>
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 8,
+            color: status.includes("🌸") ? "#059669" : "#ef4444",
+            fontWeight: "500",
+          }}
+        >
           {status}
         </p>
       )}
@@ -136,7 +139,7 @@ export default function MoodTracker() {
           border: "1px solid #ccc",
           backgroundColor: "#fff",
           marginTop: 10,
-          cursor: "pointer"
+          cursor: "pointer",
         }}
       >
         Back
