@@ -43,7 +43,6 @@ export default function MoodTracker() {
     setLoading(true)
     setStatus("")
 
-    // 🔹 Payload with mandatory journal
     const payload = {
       userId: user.uid,
       mood,
@@ -51,7 +50,7 @@ export default function MoodTracker() {
       createdAt: serverTimestamp(),
     }
 
-    console.log("Payload going to Firestore:", payload) // optional debug
+    console.log("Payload going to Firestore:", payload) // debug log
 
     try {
       await addDoc(collection(db, "moods"), payload)
@@ -61,20 +60,12 @@ export default function MoodTracker() {
       setJournal("")
     } catch (err) {
       console.error("🔥 Firestore FULL error:", err)
-      console.error("🔥 Error code:", err.code)
-      console.error("🔥 Error message:", err.message)
-
-      // 🛟 Backup user data locally
+      setStatus(`❌ ${err.code || "Failed to save mood"}`)
+      // backup locally
       localStorage.setItem(
         "mood_backup",
-        JSON.stringify({
-          mood,
-          journal,
-          date: Date.now(),
-        })
+        JSON.stringify({ mood, journal, date: Date.now() })
       )
-
-      setStatus(`❌ ${err.code || "Failed to save mood"}`)
     } finally {
       setLoading(false)
     }
@@ -148,4 +139,3 @@ export default function MoodTracker() {
     </main>
   )
 }
-✅ 
