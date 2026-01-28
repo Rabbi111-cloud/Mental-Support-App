@@ -18,13 +18,9 @@ export default function MoodTracker() {
   // ✅ Wait for Firebase auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) {
-        router.push("/login")
-      } else {
-        setUser(u)
-      }
+      if (!u) router.push("/login")
+      else setUser(u)
     })
-
     return () => unsub()
   }, [router])
 
@@ -39,18 +35,20 @@ export default function MoodTracker() {
       return
     }
 
+    if (!journal.trim()) {
+      setStatus("📝 Please write your journal entry")
+      return
+    }
+
     setLoading(true)
     setStatus("")
 
-    // 🔹 Build payload, only include journal if non-empty
+    // 🔹 Payload with mandatory journal
     const payload = {
       userId: user.uid,
-      mood: mood,
+      mood,
+      journal: journal.trim(),
       createdAt: serverTimestamp(),
-    }
-
-    if (journal.trim()) {
-      payload.journal = journal.trim()
     }
 
     console.log("Payload going to Firestore:", payload) // optional debug
@@ -116,7 +114,7 @@ export default function MoodTracker() {
       <textarea
         value={journal}
         onChange={(e) => setJournal(e.target.value)}
-        placeholder="Write anything you want..."
+        placeholder="Write your journal entry..."
         style={{ width: "100%", padding: 12, marginTop: 10 }}
       />
 
@@ -150,4 +148,4 @@ export default function MoodTracker() {
     </main>
   )
 }
-
+✅ 
