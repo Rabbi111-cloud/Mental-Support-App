@@ -28,7 +28,6 @@ export default function MoodTracker() {
     return () => unsub()
   }, [router])
 
-  // ✅ Save mood safely
   const saveMood = async () => {
     if (!user) {
       setStatus("❌ Not authenticated")
@@ -43,9 +42,8 @@ export default function MoodTracker() {
     setLoading(true)
     setStatus("")
 
-    // ✅ Build payload safely
     const payload = {
-      userId: user.uid, // MUST match Firestore rules
+      userId: user.uid,
       mood: mood,
       createdAt: serverTimestamp(),
     }
@@ -61,9 +59,12 @@ export default function MoodTracker() {
       setMood("")
       setJournal("")
     } catch (err) {
-      console.error("Firestore error:", err)
+      // 🔥 STEP 1: FULL ERROR VISIBILITY
+      console.error("🔥 Firestore FULL error:", err)
+      console.error("🔥 Error code:", err.code)
+      console.error("🔥 Error message:", err.message)
 
-      // 🛟 Backup for user safety
+      // 🛟 Backup user data
       localStorage.setItem(
         "mood_backup",
         JSON.stringify({
@@ -73,7 +74,7 @@ export default function MoodTracker() {
         })
       )
 
-      setStatus("❌ Failed to save mood. Try again.")
+      setStatus(`❌ ${err.code || "Failed to save mood"}`)
     } finally {
       setLoading(false)
     }
@@ -96,16 +97,10 @@ export default function MoodTracker() {
         Track how you feel — gently and privately 🌱
       </p>
 
-      {/* Mood Selector */}
       <select
         value={mood}
         onChange={(e) => setMood(e.target.value)}
-        style={{
-          width: "100%",
-          padding: 12,
-          marginTop: 10,
-          borderRadius: 6,
-        }}
+        style={{ width: "100%", padding: 12, marginTop: 10 }}
       >
         <option value="">Select mood</option>
         <option value="happy">😊 Happy</option>
@@ -116,21 +111,13 @@ export default function MoodTracker() {
         <option value="neutral">😐 Neutral</option>
       </select>
 
-      {/* Journal */}
       <textarea
         value={journal}
         onChange={(e) => setJournal(e.target.value)}
         placeholder="Write anything you want..."
-        style={{
-          width: "100%",
-          padding: 12,
-          marginTop: 10,
-          minHeight: 120,
-          borderRadius: 6,
-        }}
+        style={{ width: "100%", padding: 12, marginTop: 10 }}
       />
 
-      {/* Save Button */}
       <button
         onClick={saveMood}
         disabled={loading}
@@ -148,19 +135,13 @@ export default function MoodTracker() {
         {loading ? "Saving..." : "Save Mood"}
       </button>
 
-      {/* Status */}
       {status && (
         <p style={{ textAlign: "center", marginTop: 10 }}>{status}</p>
       )}
 
-      {/* Back */}
       <button
         onClick={() => router.back()}
-        style={{
-          marginTop: 12,
-          width: "100%",
-          padding: 10,
-        }}
+        style={{ marginTop: 12, width: "100%" }}
       >
         Back
       </button>
