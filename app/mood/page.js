@@ -1,42 +1,51 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { auth, db } from "../../lib/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
 import { useRouter } from "next/navigation"
 
 export default function MoodTracker() {
   const router = useRouter()
+  const [user, setUser] = useState(null)
   const [mood, setMood] = useState("")
   const [journal, setJournal] = useState("")
   const [status, setStatus] = useState("")
 
-  const saveMood = async () => {
-    const user = auth.currentUser
+  // ✅ Wait for auth properly
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) router.push("/login")
+      else setUser(u)
+    })
+    return () => unsub()
+  }, [router])
 
+  const saveMood = async () => {
     if (!user) {
-      setStatus("❌ You must be logged in to save your mood")
+      setStatus("❌ Not authenticated")
       return
     }
 
     if (!mood) {
-      setStatus("🌱 Please select your mood first")
+      setStatus("🌱 Please select a mood")
       return
     }
 
     try {
       await addDoc(collection(db, "moods"), {
-        userId: user.uid, // 🔑 Must match your Firestore rules
+        userId: user.uid, // 🔑 matches rules
         mood,
         journal,
         createdAt: serverTimestamp(),
       })
 
-      setStatus("🌸 Mood saved successfully!")
+      setStatus("🌸 Mood saved successfully")
       setMood("")
       setJournal("")
     } catch (err) {
-      console.error("Firestore error:", err.code, err.message)
+      console.error("Firestore error:", err)
       setStatus("❌ Failed to save mood. Try again.")
     }
   }
@@ -45,60 +54,37 @@ export default function MoodTracker() {
     <main
       style={{
         maxWidth: 500,
-        margin: "20px auto",
+        margin: "auto",
         padding: 20,
-        borderRadius: 12,
-        backgroundColor: "#fff8f0",
-        boxShadow: "0 6px 20px rgba(0,0,0,0.05)",
         minHeight: "100vh",
+        background: "#fff8f0",
         color: "#111827",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
       }}
     >
-      <h2 style={{ textAlign: "center", marginBottom: 10 }}>Mood & Journaling</h2>
+      <h2 style={{ textAlign: "center" }}>Mood & Journal</h2>
       <p style={{ textAlign: "center", color: "#6b7280" }}>
-        Track your mood and write down your thoughts. 🌿 Every entry is private to you.
+        Track how you feel — gently and privately 🌱
       </p>
 
       <select
         value={mood}
         onChange={(e) => setMood(e.target.value)}
-        style={{
-          width: "100%",
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #fbbf24",
-          marginBottom: 12,
-          backgroundColor: "#fff",
-          fontSize: 16,
-        }}
+        style={{ width: "100%", padding: 12, marginTop: 10 }}
       >
-        <option value="">Select your mood...</option>
+        <option value="">Select mood</option>
         <option value="happy">😊 Happy</option>
         <option value="sad">😢 Sad</option>
         <option value="anxious">😟 Anxious</option>
         <option value="angry">😡 Angry</option>
-        <option value="neutral">😐 Neutral</option>
-        <option value="excited">🤩 Excited</option>
         <option value="tired">😴 Tired</option>
+        <option value="neutral">😐 Neutral</option>
       </select>
 
       <textarea
         value={journal}
         onChange={(e) => setJournal(e.target.value)}
-        placeholder="Write your thoughts or notes..."
-        style={{
-          width: "100%",
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #fbbf24",
-          minHeight: 100,
-          marginBottom: 12,
-          backgroundColor: "#fff",
-          fontSize: 15,
-        }}
+        placeholder="Write anything you want..."
+        style={{ width: "100%", padding: 12, marginTop: 10 }}
       />
 
       <button
@@ -106,41 +92,23 @@ export default function MoodTracker() {
         style={{
           width: "100%",
           padding: 14,
-          borderRadius: 8,
+          marginTop: 12,
+          background: "#f59e0b",
           border: "none",
-          backgroundColor: "#f59e0b",
-          color: "#111827",
+          borderRadius: 8,
           fontWeight: "bold",
-          cursor: "pointer",
         }}
       >
         Save Mood
       </button>
 
       {status && (
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: 8,
-            color: status.includes("🌸") ? "#059669" : "#ef4444",
-            fontWeight: "500",
-          }}
-        >
-          {status}
-        </p>
+        <p style={{ textAlign: "center", marginTop: 10 }}>{status}</p>
       )}
 
       <button
         onClick={() => router.back()}
-        style={{
-          width: "100%",
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #ccc",
-          backgroundColor: "#fff",
-          marginTop: 10,
-          cursor: "pointer",
-        }}
+        style={{ marginTop: 12, width: "100%" }}
       >
         Back
       </button>
