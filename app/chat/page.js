@@ -44,7 +44,32 @@ function MoodTracker({ onClose, moodHistory }) {
     }
   }
 
+  // Last mood
   const lastMood = moodHistory?.[0]
+
+  // Last 7 moods
+  const last7Moods = moodHistory.slice(0, 7)
+
+  // Mood analytics
+  const moodCount = { happy: 0, neutral: 0, sad: 0, stressed: 0 }
+  moodHistory.forEach(m => {
+    if (m.mood in moodCount) moodCount[m.mood]++
+  })
+
+  // Mood streak (consecutive days)
+  let streak = 0
+  let prevDate = null
+  moodHistory.forEach(m => {
+    const d = m.createdAt?.toDate?.() || new Date()
+    if (!prevDate) {
+      streak = 1
+      prevDate = d
+    } else {
+      const diff = Math.floor((prevDate - d) / (1000 * 60 * 60 * 24))
+      if (diff === 1) streak++
+      prevDate = d
+    }
+  })
 
   return (
     <div
@@ -124,6 +149,7 @@ function MoodTracker({ onClose, moodHistory }) {
           </button>
         </div>
 
+        {/* Last mood */}
         {lastMood && (
           <div
             style={{
@@ -139,6 +165,25 @@ function MoodTracker({ onClose, moodHistory }) {
             {lastMood.note && <p style={{ fontSize: 12, color: "#065f46" }}>{lastMood.note}</p>}
           </div>
         )}
+
+        {/* Mood dashboard */}
+        <div style={{ marginTop: 16, padding: 12, backgroundColor: "#f0fdf4", borderRadius: 6 }}>
+          <h4 style={{ fontWeight: "bold", marginBottom: 8 }}>Mood Summary</h4>
+          <p style={{ fontSize: 12, marginBottom: 4 }}>Streak: {streak} day(s)</p>
+          <p style={{ fontSize: 12, marginBottom: 4 }}>
+            Happy: {moodCount.happy} | Neutral: {moodCount.neutral} | Sad: {moodCount.sad} | Stressed: {moodCount.stressed}
+          </p>
+          <div>
+            <strong>Last 7 moods:</strong>
+            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
+              {last7Moods.map((m, idx) => (
+                <li key={idx} style={{ fontSize: 12 }}>
+                  {m.mood} {m.note ? `- ${m.note}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   )
