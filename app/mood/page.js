@@ -18,8 +18,12 @@ export default function MoodTracker() {
   // ✅ Wait for Firebase auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) router.push("/login")
-      else setUser(u)
+      if (!u) {
+        router.push("/login")
+      } else {
+        setUser(u)
+        console.log("🔥 Authenticated user:", u.uid)
+      }
     })
     return () => unsub()
   }, [router])
@@ -50,7 +54,10 @@ export default function MoodTracker() {
       createdAt: serverTimestamp(),
     }
 
-    console.log("Payload going to Firestore:", payload) // debug log
+    // 🔹 Debug: verify db and collection
+    console.log("🔥 db object:", db)
+    console.log("🔥 collection ref:", collection(db, "moods"))
+    console.log("🔥 payload:", payload)
 
     try {
       await addDoc(collection(db, "moods"), payload)
@@ -58,9 +65,16 @@ export default function MoodTracker() {
       setStatus("🌸 Mood saved successfully")
       setMood("")
       setJournal("")
+
+      // Remove any local backup on success
+      localStorage.removeItem("mood_backup")
     } catch (err) {
       console.error("🔥 Firestore FULL error:", err)
+      console.error("🔥 Error code:", err.code)
+      console.error("🔥 Error message:", err.message)
+
       setStatus(`❌ ${err.code || "Failed to save mood"}`)
+
       // backup locally
       localStorage.setItem(
         "mood_backup",
@@ -70,6 +84,19 @@ export default function MoodTracker() {
       setLoading(false)
     }
   }
+
+  // 🔹 Restore backup if any exists
+  useEffect(() => {
+    const backup = localStorage.getItem("mood_backup")
+    if (backup) {
+      const { mood: m, journal: j } = JSON.parse(backup)
+      if (m && j) {
+        setMood(m)
+        setJournal(j)
+        setStatus("💾 Restored unsaved mood from last session")
+      }
+    }
+  }, [])
 
   return (
     <main
