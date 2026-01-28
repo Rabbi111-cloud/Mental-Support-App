@@ -8,20 +8,27 @@ import { useRouter } from "next/navigation"
 
 export default function MoodTracker() {
   const router = useRouter()
+
   const [user, setUser] = useState(null)
   const [mood, setMood] = useState("")
   const [journal, setJournal] = useState("")
   const [status, setStatus] = useState("")
+  const [loading, setLoading] = useState(false)
 
-  // ✅ Wait for auth properly
+  // ✅ Wait for Firebase auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) router.push("/login")
-      else setUser(u)
+      if (!u) {
+        router.push("/login")
+      } else {
+        setUser(u)
+      }
     })
+
     return () => unsub()
   }, [router])
 
+  // ✅ Save mood safely
   const saveMood = async () => {
     if (!user) {
       setStatus("❌ Not authenticated")
@@ -33,20 +40,42 @@ export default function MoodTracker() {
       return
     }
 
+    setLoading(true)
+    setStatus("")
+
+    // ✅ Build payload safely
+    const payload = {
+      userId: user.uid, // MUST match Firestore rules
+      mood: mood,
+      createdAt: serverTimestamp(),
+    }
+
+    if (journal.trim()) {
+      payload.journal = journal.trim()
+    }
+
     try {
-      await addDoc(collection(db, "moods"), {
-        userId: user.uid, // 🔑 matches rules
-        mood,
-        journal,
-        createdAt: serverTimestamp(),
-      })
+      await addDoc(collection(db, "moods"), payload)
 
       setStatus("🌸 Mood saved successfully")
       setMood("")
       setJournal("")
     } catch (err) {
       console.error("Firestore error:", err)
+
+      // 🛟 Backup for user safety
+      localStorage.setItem(
+        "mood_backup",
+        JSON.stringify({
+          mood,
+          journal,
+          date: Date.now(),
+        })
+      )
+
       setStatus("❌ Failed to save mood. Try again.")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -62,14 +91,21 @@ export default function MoodTracker() {
       }}
     >
       <h2 style={{ textAlign: "center" }}>Mood & Journal</h2>
+
       <p style={{ textAlign: "center", color: "#6b7280" }}>
         Track how you feel — gently and privately 🌱
       </p>
 
+      {/* Mood Selector */}
       <select
         value={mood}
         onChange={(e) => setMood(e.target.value)}
-        style={{ width: "100%", padding: 12, marginTop: 10 }}
+        style={{
+          width: "100%",
+          padding: 12,
+          marginTop: 10,
+          borderRadius: 6,
+        }}
       >
         <option value="">Select mood</option>
         <option value="happy">😊 Happy</option>
@@ -80,35 +116,51 @@ export default function MoodTracker() {
         <option value="neutral">😐 Neutral</option>
       </select>
 
+      {/* Journal */}
       <textarea
         value={journal}
         onChange={(e) => setJournal(e.target.value)}
         placeholder="Write anything you want..."
-        style={{ width: "100%", padding: 12, marginTop: 10 }}
+        style={{
+          width: "100%",
+          padding: 12,
+          marginTop: 10,
+          minHeight: 120,
+          borderRadius: 6,
+        }}
       />
 
+      {/* Save Button */}
       <button
         onClick={saveMood}
+        disabled={loading}
         style={{
           width: "100%",
           padding: 14,
           marginTop: 12,
-          background: "#f59e0b",
+          background: loading ? "#fcd34d" : "#f59e0b",
           border: "none",
           borderRadius: 8,
           fontWeight: "bold",
+          cursor: loading ? "not-allowed" : "pointer",
         }}
       >
-        Save Mood
+        {loading ? "Saving..." : "Save Mood"}
       </button>
 
+      {/* Status */}
       {status && (
         <p style={{ textAlign: "center", marginTop: 10 }}>{status}</p>
       )}
 
+      {/* Back */}
       <button
         onClick={() => router.back()}
-        style={{ marginTop: 12, width: "100%" }}
+        style={{
+          marginTop: 12,
+          width: "100%",
+          padding: 10,
+        }}
       >
         Back
       </button>
